@@ -38,6 +38,9 @@ struct ShadowRootInit {
     bool serializable { false };
     SlotAssignmentMode slotAssignment { SlotAssignmentMode::Named };
     RefPtr<CustomElementRegistry> registry;
+#if ENABLE(REFERENCE_TARGET)
+    String referenceTarget;
+#endif
 };
 
 }

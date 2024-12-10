@@ -172,6 +172,21 @@ static bool nodeAndRendererAreValid(Node* node)
     return node ? nodeRendererIsValid(*node) : false;
 }
 
+
+static RefPtr<Element> getElementByIdWithReferenceTarget(const TreeScope& treeScope, const AtomString& elementId)
+{
+    if (elementId.isNull())
+        return nullptr;
+    
+    RefPtr<Element> element = treeScope.getElementById(elementId);
+
+#if ENABLE(REFERENCE_TARGET)
+    return element->deepShadowRootReferenceTargetOrSelf();
+#else
+    return element;
+#endif
+}
+
 AccessibilityObjectInclusion AXComputedObjectAttributeCache::getIgnored(AXID id) const
 {
     auto it = m_idMapping.find(id);
@@ -2777,9 +2792,9 @@ void AXObjectCache::handleAttributeChange(Element* element, const QualifiedName&
         if (RefPtr label = dynamicDowncast<HTMLLabelElement>(element)) {
             updateLabelFor(*label);
 
-            if (RefPtr oldControl = element->treeScope().getElementById(oldValue))
+            if (RefPtr oldControl = getElementByIdWithReferenceTarget(element->treeScope(), oldValue))
                 postNotification(oldControl.get(), AXNotification::TextChanged);
-            if (RefPtr newControl = element->treeScope().getElementById(newValue))
+            if (RefPtr newControl = getElementByIdWithReferenceTarget(element->treeScope(), newValue))
                 postNotification(newControl.get(), AXNotification::TextChanged);
         }
     } else if (attrName == requiredAttr)
@@ -5305,10 +5320,10 @@ bool AXObjectCache::addRelation(Element& origin, const QualifiedName& attribute)
     bool addedRelation = false;
     auto relationType = attributeToRelationType(attribute);
     if (Element::isElementReflectionAttribute(Ref { m_document->settings() }, attribute)) {
-        if (auto reflectedElement = origin.getElementAttribute(attribute))
+        if (auto reflectedElement = origin.getElementForAttributeInternal(attribute))
             return addRelation(origin, *reflectedElement, relationType);
     } else if (Element::isElementsArrayReflectionAttribute(attribute)) {
-        if (auto reflectedElements = origin.getElementsArrayAttribute(attribute)) {
+        if (auto reflectedElements = origin.getElementsArrayForAttributeInternal(attribute)) {
             for (auto reflectedElement : reflectedElements.value()) {
                 if (addRelation(origin, reflectedElement, relationType))
                     addedRelation = true;
@@ -5330,7 +5345,7 @@ bool AXObjectCache::addRelation(Element& origin, const QualifiedName& attribute)
 
     SpaceSplitString ids(value, SpaceSplitString::ShouldFoldCase::No);
     for (auto& id : ids) {
-        RefPtr target = origin.treeScope().getElementById(id);
+        RefPtr target = getElementByIdWithReferenceTarget(origin.treeScope(), id);
         if (!target || target == &origin)
             continue;
 

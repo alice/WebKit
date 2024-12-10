@@ -1766,7 +1766,7 @@ void AccessibilityNodeObject::labelText(Vector<AccessibilityText>& textOrder) co
     auto ariaLabel = getAttributeTrimmed(aria_labelAttr);
     if (!ariaLabel.isEmpty()) {
         textOrder.append({ WTFMove(ariaLabel), AccessibilityTextSource::LabelByElement });
-        return;
+    return;
     }
 }
 
@@ -1811,7 +1811,7 @@ void AccessibilityNodeObject::alternativeText(Vector<AccessibilityText>& textOrd
 
     Node* node = this->node();
     if (!node)
-        return;
+    return;
 
     auto objectCache = axObjectCache();
     // The fieldset element derives its alternative text from the first associated legend element if one is available.

@@ -59,6 +59,9 @@ struct SameSizeAsShadowRoot : public DocumentFragment, public TreeScope {
     void* styleScope;
     void* slotAssignment;
     std::optional<UncheckedKeyHashMap<AtomString, AtomString>> partMappings;
+#if ENABLE(REFERENCE_TARGET)
+    AtomString referenceTarget;
+#endif
 };
 
 static_assert(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), "shadowroot should stay small");
@@ -67,17 +70,17 @@ static_assert(sizeof(WeakPtr<Element, WeakPtrImplWithEventTargetData>) == sizeof
 #endif
 
 ShadowRoot::ShadowRoot(Document& document, ShadowRootMode mode, SlotAssignmentMode assignmentMode, DelegatesFocus delegatesFocus,
-    Clonable clonable, Serializable serializable, AvailableToElementInternals availableToElementInternals, RefPtr<CustomElementRegistry>&& registry, ScopedCustomElementRegistry scopedRegistry)
-    : DocumentFragment(document, TypeFlag::IsShadowRoot)
-    , TreeScope(*this, document, WTFMove(registry))
-    , m_delegatesFocus(delegatesFocus == DelegatesFocus::Yes)
-    , m_isClonable(clonable == Clonable::Yes)
-    , m_serializable(serializable == Serializable::Yes)
-    , m_availableToElementInternals(availableToElementInternals == AvailableToElementInternals::Yes)
-    , m_hasScopedCustomElementRegistry(scopedRegistry == ScopedCustomElementRegistry::Yes)
-    , m_mode(mode)
-    , m_slotAssignmentMode(assignmentMode)
-    , m_styleScope(makeUnique<Style::Scope>(*this))
+                       Clonable clonable, Serializable serializable, AvailableToElementInternals availableToElementInternals, RefPtr<CustomElementRegistry>&& registry, ScopedCustomElementRegistry scopedRegistry)
+: DocumentFragment(document, TypeFlag::IsShadowRoot)
+, TreeScope(*this, document, WTFMove(registry))
+, m_delegatesFocus(delegatesFocus == DelegatesFocus::Yes)
+, m_isClonable(clonable == Clonable::Yes)
+, m_serializable(serializable == Serializable::Yes)
+, m_availableToElementInternals(availableToElementInternals == AvailableToElementInternals::Yes)
+, m_hasScopedCustomElementRegistry(scopedRegistry == ScopedCustomElementRegistry::Yes)
+, m_mode(mode)
+, m_slotAssignmentMode(assignmentMode)
+, m_styleScope(makeUnique<Style::Scope>(*this))
 {
     setEventTargetFlag(EventTargetFlag::IsInShadowTree);
     if (m_mode == ShadowRootMode::UserAgent)
@@ -86,11 +89,11 @@ ShadowRoot::ShadowRoot(Document& document, ShadowRootMode mode, SlotAssignmentMo
 
 
 ShadowRoot::ShadowRoot(Document& document, std::unique_ptr<SlotAssignment>&& slotAssignment)
-    : DocumentFragment(document, TypeFlag::IsShadowRoot)
-    , TreeScope(*this, document, nullptr)
-    , m_mode(ShadowRootMode::UserAgent)
-    , m_styleScope(makeUnique<Style::Scope>(*this))
-    , m_slotAssignment(WTFMove(slotAssignment))
+: DocumentFragment(document, TypeFlag::IsShadowRoot)
+, TreeScope(*this, document, nullptr)
+, m_mode(ShadowRootMode::UserAgent)
+, m_styleScope(makeUnique<Style::Scope>(*this))
+, m_slotAssignment(WTFMove(slotAssignment))
 {
     setEventTargetFlag(EventTargetFlag::IsInShadowTree);
     setEventTargetFlag(EventTargetFlag::HasBeenInUserAgentShadowTree);
@@ -101,20 +104,20 @@ ShadowRoot::~ShadowRoot()
 {
     if (isConnected())
         document().didRemoveInDocumentShadowRoot(*this);
-
+    
     if (RefPtr styleSheetList = m_styleSheetList)
         styleSheetList->detach();
-
+    
     // We cannot let ContainerNode destructor call willBeDeletedFrom()
     // for this ShadowRoot instance because TreeScope destructor
     // clears Node::m_treeScope thus ContainerNode is no longer able
     // to access it Document reference after that.
     // We can't ref document() here since it may have started destruction.
     willBeDeletedFrom(document());
-
+    
     ASSERT(!m_hasBegunDeletingDetachedChildren);
     m_hasBegunDeletingDetachedChildren = true;
-
+    
     // We must remove all of our children first before the TreeScope destructor
     // runs so we don't go through Node::setTreeScopeRecursively for each child with a
     // destructed tree scope in each descendant.
@@ -149,24 +152,24 @@ void ShadowRoot::removedFromAncestor(RemovalType removalType, ContainerNode& old
 void ShadowRoot::childrenChanged(const ChildChange& childChange)
 {
     DocumentFragment::childrenChanged(childChange);
-
+    
     if (!m_host || m_mode == ShadowRootMode::UserAgent)
         return; // Don't support first-child, nth-of-type, etc... in UA shadow roots as an optimization.
-
+    
     // FIXME: Avoid always invalidating style just for first-child, etc... as done in Element::childrenChanged.
     switch (childChange.type) {
-    case ChildChange::Type::ElementInserted:
-    case ChildChange::Type::ElementRemoved:
-        m_host->invalidateStyleForSubtreeInternal();
-        break;
-    case ChildChange::Type::TextInserted:
-    case ChildChange::Type::TextRemoved:
-    case ChildChange::Type::TextChanged:
-    case ChildChange::Type::AllChildrenRemoved:
-    case ChildChange::Type::NonContentsChildRemoved:
-    case ChildChange::Type::NonContentsChildInserted:
-    case ChildChange::Type::AllChildrenReplaced:
-        break;
+        case ChildChange::Type::ElementInserted:
+        case ChildChange::Type::ElementRemoved:
+            m_host->invalidateStyleForSubtreeInternal();
+            break;
+        case ChildChange::Type::TextInserted:
+        case ChildChange::Type::TextRemoved:
+        case ChildChange::Type::TextChanged:
+        case ChildChange::Type::AllChildrenRemoved:
+        case ChildChange::Type::NonContentsChildRemoved:
+        case ChildChange::Type::NonContentsChildInserted:
+        case ChildChange::Type::AllChildrenReplaced:
+            break;
     }
 }
 
@@ -181,10 +184,10 @@ void ShadowRoot::moveShadowRootToNewDocument(Document& oldDocument, Document& ne
 {
     if (oldDocument.templateDocumentHost() != &newDocument && newDocument.templateDocumentHost() != &oldDocument)
         setAdoptedStyleSheets({ });
-
+    
     setDocumentScope(newDocument);
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(!parentTreeScope() || &parentTreeScope()->documentScope() == &newDocument);
-
+    
     // Style scopes are document specific.
     m_styleScope = makeUnique<Style::Scope>(*this);
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(&m_styleScope->document() == &newDocument);
@@ -200,13 +203,13 @@ StyleSheetList& ShadowRoot::styleSheets()
 ExceptionOr<void> ShadowRoot::replaceChildrenWithMarkup(const String& markup, OptionSet<ParserContentPolicy> parserContentPolicy)
 {
     auto policy = OptionSet<ParserContentPolicy> { ParserContentPolicy::AllowScriptingContent } | parserContentPolicy;
-
+    
     if (markup.isEmpty()) {
         ChildListMutationScope mutation(*this);
         removeChildren();
         return { };
     }
-
+    
     auto fragment = createFragmentForInnerOuterHTML(*protectedHost(), markup, policy, customElementRegistry());
     if (fragment.hasException())
         return fragment.releaseException();
@@ -216,10 +219,10 @@ ExceptionOr<void> ShadowRoot::replaceChildrenWithMarkup(const String& markup, Op
 ExceptionOr<void> ShadowRoot::setHTMLUnsafe(std::variant<RefPtr<TrustedHTML>, String>&& html)
 {
     auto stringValueHolder = trustedTypeCompliantString(*document().scriptExecutionContext(), WTFMove(html), "ShadowRoot setHTMLUnsafe"_s);
-
+    
     if (stringValueHolder.hasException())
         return stringValueHolder.releaseException();
-
+    
     return replaceChildrenWithMarkup(stringValueHolder.releaseReturnValue(), { ParserContentPolicy::AllowDeclarativeShadowRoots, ParserContentPolicy::AlwaysParseAsHTML });
 }
 
@@ -236,24 +239,24 @@ String ShadowRoot::innerHTML() const
 ExceptionOr<void> ShadowRoot::setInnerHTML(std::variant<RefPtr<TrustedHTML>, String>&& html)
 {
     auto stringValueHolder = trustedTypeCompliantString(*document().scriptExecutionContext(), WTFMove(html), "ShadowRoot innerHTML"_s);
-
+    
     if (stringValueHolder.hasException())
         return stringValueHolder.releaseException();
-
+    
     return replaceChildrenWithMarkup(stringValueHolder.releaseReturnValue(), { });
 }
 
 bool ShadowRoot::childTypeAllowed(NodeType type) const
 {
     switch (type) {
-    case ELEMENT_NODE:
-    case PROCESSING_INSTRUCTION_NODE:
-    case COMMENT_NODE:
-    case TEXT_NODE:
-    case CDATA_SECTION_NODE:
-        return true;
-    default:
-        return false;
+        case ELEMENT_NODE:
+        case PROCESSING_INSTRUCTION_NODE:
+        case COMMENT_NODE:
+        case TEXT_NODE:
+        case CDATA_SECTION_NODE:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -262,17 +265,17 @@ Ref<Node> ShadowRoot::cloneNodeInternal(TreeScope& treeScope, CloningOperation t
     RELEASE_ASSERT(m_mode != ShadowRootMode::UserAgent);
     ASSERT(m_isClonable);
     switch (type) {
-    case CloningOperation::SelfWithTemplateContent:
-        return create(treeScope.documentScope(), m_mode, m_slotAssignmentMode,
-            m_delegatesFocus ? DelegatesFocus::Yes : DelegatesFocus::No,
-            Clonable::Yes,
-            m_serializable ? Serializable::Yes : Serializable::No,
-            m_availableToElementInternals ? AvailableToElementInternals::Yes : AvailableToElementInternals::No);
-    case CloningOperation::OnlySelf:
-    case CloningOperation::Everything:
-        break;
+        case CloningOperation::SelfWithTemplateContent:
+            return create(treeScope.documentScope(), m_mode, m_slotAssignmentMode,
+                          m_delegatesFocus ? DelegatesFocus::Yes : DelegatesFocus::No,
+                          Clonable::Yes,
+                          m_serializable ? Serializable::Yes : Serializable::No,
+                          m_availableToElementInternals ? AvailableToElementInternals::Yes : AvailableToElementInternals::No);
+        case CloningOperation::OnlySelf:
+        case CloningOperation::Everything:
+            break;
     }
-
+    
     RELEASE_ASSERT_NOT_REACHED(); // ShadowRoot is never cloned directly on its own.
     return *this;
 }
@@ -306,7 +309,7 @@ void ShadowRoot::addSlotElementByName(const AtomString& name, HTMLSlotElement& s
         else
             m_slotAssignment = makeUnique<ManualSlotAssignment>();
     }
-
+    
     return m_slotAssignment->addSlotElementByName(name, slot, *this);
 }
 
@@ -342,72 +345,72 @@ const Vector<WeakPtr<Node, WeakPtrImplWithEventTargetData>>* ShadowRoot::assigne
 static std::optional<std::pair<AtomString, AtomString>> parsePartMapping(StringView mappingString)
 {
     const auto end = mappingString.length();
-
+    
     auto skipWhitespace = [&](auto position) {
         while (position < end && isASCIIWhitespace(mappingString[position]))
             ++position;
         return position;
     };
-
+    
     auto collectValue = [&](auto position) {
         while (position < end && (!isASCIIWhitespace(mappingString[position]) && mappingString[position] != ':'))
             ++position;
         return position;
     };
-
+    
     size_t begin = 0;
     begin = skipWhitespace(begin);
-
+    
     auto firstPartEnd = collectValue(begin);
     if (firstPartEnd == begin)
         return { };
-
+    
     auto firstPart = mappingString.substring(begin, firstPartEnd - begin).toAtomString();
-
+    
     begin = skipWhitespace(firstPartEnd);
     if (begin == end)
         return std::make_pair(firstPart, firstPart);
-
+    
     if (mappingString[begin] != ':')
         return { };
-
+    
     begin = skipWhitespace(begin + 1);
-
+    
     auto secondPartEnd = collectValue(begin);
     if (secondPartEnd == begin)
         return { };
-
+    
     auto secondPart = mappingString.substring(begin, secondPartEnd - begin).toAtomString();
-
+    
     begin = skipWhitespace(secondPartEnd);
     if (begin != end)
         return { };
-
+    
     return std::make_pair(firstPart, secondPart);
 }
 
 static ShadowRoot::PartMappings parsePartMappingsList(StringView mappingsListString)
 {
     ShadowRoot::PartMappings mappings;
-
+    
     const auto end = mappingsListString.length();
-
+    
     size_t begin = 0;
     while (begin < end) {
         size_t mappingEnd = begin;
         while (mappingEnd < end && mappingsListString[mappingEnd] != ',')
             ++mappingEnd;
-
+        
         auto result = parsePartMapping(mappingsListString.substring(begin, mappingEnd - begin));
         if (result)
             mappings.add(result->first, Vector<AtomString, 1>()).iterator->value.append(result->second);
-
+        
         if (mappingEnd == end)
             break;
-
+        
         begin = mappingEnd + 1;
     }
-
+    
     return mappings;
 }
 
@@ -417,7 +420,7 @@ const ShadowRoot::PartMappings& ShadowRoot::partMappings() const
         auto exportpartsValue = host()->attributeWithoutSynchronization(HTMLNames::exportpartsAttr);
         m_partMappings = parsePartMappingsList(exportpartsValue);
     }
-
+    
     return *m_partMappings;
 }
 
@@ -451,4 +454,29 @@ Vector<RefPtr<WebAnimation>> ShadowRoot::getAnimations()
     });
 }
 
+#if ENABLE(REFERENCE_TARGET)
+bool ShadowRoot::hasReferenceTarget() const
+{
+    return !m_referenceTarget.isNull();
 }
+
+const AtomString& ShadowRoot::referenceTarget() const
+{
+    return m_referenceTarget;
+}
+
+void ShadowRoot::setReferenceTarget(const AtomString& referenceTarget) {
+    m_referenceTarget = referenceTarget;
+}
+
+RefPtr<Element> ShadowRoot::referenceTargetElementOrHost() const
+{
+    if (!hasReferenceTarget()) {
+        return host();
+    }
+    
+    return getElementById(m_referenceTarget);
+}
+#endif
+
+} // namespace WebCore

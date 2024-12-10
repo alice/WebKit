@@ -145,6 +145,14 @@ HTMLFormElement* HTMLOptionElement::form() const
     return nullptr;
 }
 
+HTMLFormElement* HTMLOptionElement::formForBindings() const
+{
+    HTMLFormElement* formElement = form();
+    if (!formElement || &formElement->treeScope() != &treeScope())
+        return nullptr;
+    return formElement;
+}
+
 int HTMLOptionElement::index() const
 {
     // It would be faster to cache the index, but harder to get it right in all cases.

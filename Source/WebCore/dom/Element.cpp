@@ -2330,9 +2330,9 @@ ExplicitlySetAttrElementsMap* Element::explicitlySetAttrElementsMapIfExists() co
     return hasRareData() ? &elementRareData()->explicitlySetAttrElementsMap() : nullptr;
 }
 
-static RefPtr<Element> getElementByIdIncludingDisconnected(const Element& startElement, const AtomString& id)
+static RefPtr<Element> getElementByIdInternalIncludingDisconnected(const Element& startElement, const AtomString& id)
 {
-    if (id.isEmpty())
+    if (id.isNull() || id.isEmpty())
         return nullptr;
 
     if (LIKELY(startElement.isInTreeScope()))
@@ -2352,26 +2352,46 @@ static RefPtr<Element> getElementByIdIncludingDisconnected(const Element& startE
     return nullptr;
 }
 
-RefPtr<Element> Element::getElementAttribute(const QualifiedName& attributeName) const
+RefPtr<Element> Element::getElementForAttributeInternal(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
-
+    RefPtr<Element> element = nullptr;
+    bool hasExplicitlySetElement = false;
+    
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
         auto it = map->find(attributeName);
         if (it != map->end()) {
             ASSERT(it->value.size() == 1);
-            RefPtr element = it->value[0].get();
-            if (element && isDescendantOrShadowDescendantOf(element->rootNode()))
-                return element;
-            return nullptr;
+            hasExplicitlySetElement = true;
+            RefPtr explicitlySetElement = it->value[0].get();
+            if (explicitlySetElement && isDescendantOrShadowDescendantOf(explicitlySetElement->rootNode()))
+                element = explicitlySetElement;
         }
     }
-
-    auto id = getAttribute(attributeName);
-    if (id.isNull())
+    
+    if (!hasExplicitlySetElement) {
+        const AtomString& id = getAttribute(attributeName);
+        element = getElementByIdInternalIncludingDisconnected(*this, id);
+    }
+    
+#if ENABLE(REFERENCE_TARGET)
+    if (element == nullptr)
         return nullptr;
 
-    return getElementByIdIncludingDisconnected(*this, id);
+    return element->deepShadowRootReferenceTargetOrSelf();
+#else
+    return element;
+#endif
+}
+
+RefPtr<Element> Element::getElementAttributeForBindings(const QualifiedName& attributeName) const
+{
+    ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
+    RefPtr<Element> element = getElementForAttributeInternal(attributeName);
+    if (!element)
+        return nullptr;
+    Ref<Node> retargeted = treeScope().retargetToScope(*element);
+    ASSERT(retargeted->isElementNode());
+    return dynamicDowncast<Element>(retargeted);
 }
 
 void Element::setElementAttribute(const QualifiedName& attributeName, Element* element)
@@ -2393,13 +2413,16 @@ void Element::setElementAttribute(const QualifiedName& attributeName, Element* e
         cache->updateRelations(*this, attributeName);
 }
 
-std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const QualifiedName& attributeName) const
+std::optional<Vector<Ref<Element>>> Element::getElementsArrayForAttributeInternal(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementsArrayReflectionAttribute(attributeName));
-
+    std::optional<Vector<Ref<Element>>> elements;
+    bool hasExplicitlySetElements = false;
+    
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
-        if (auto it = map->find(attributeName); it != map->end()) {
-            return compactMap(it->value, [&](auto& weakElement) -> std::optional<Ref<Element>> {
+        auto it = map->find(attributeName);
+        if (it != map->end()) {
+            hasExplicitlySetElements = true;
+            elements = compactMap(it->value, [&](auto& weakElement) -> std::optional<Ref<Element>> {
                 RefPtr element = weakElement.get();
                 if (element && isDescendantOrShadowDescendantOf(element->rootNode()))
                     return element.releaseNonNull();
@@ -2407,17 +2430,43 @@ std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const Qua
             });
         }
     }
+    
+    if (!hasExplicitlySetElements) {
+        QualifiedName attr = attributeName;
+        if (attributeName == HTMLNames::aria_labelledbyAttr && !hasAttribute(HTMLNames::aria_labelledbyAttr) && hasAttribute(HTMLNames::aria_labeledbyAttr))
+            attr = HTMLNames::aria_labeledbyAttr;
+        
+        SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
+        elements = compactMap(ids, [&](auto& id) {
+            return getElementByIdInternalIncludingDisconnected(*this, id);
+        });
+    }
+    
+#if ENABLE(REFERENCE_TARGET)
+    if (!elements.has_value())
+        return elements;
+    
+    elements = compactMap(elements.value(), [&](Ref<Element>& element) -> std::optional<Ref<Element>> {
+        RefPtr<Element> deepReferenceTarget = element->deepShadowRootReferenceTargetOrSelf();
+        if (!deepReferenceTarget)
+            return std::nullopt;
+        return *deepReferenceTarget;
+    });
+#endif
 
-    auto attr = attributeName;
-    if (attr == HTMLNames::aria_labelledbyAttr && !hasAttribute(HTMLNames::aria_labelledbyAttr) && hasAttribute(HTMLNames::aria_labeledbyAttr))
-        attr = HTMLNames::aria_labeledbyAttr;
+    return elements;
+}
 
-    if (!hasAttribute(attr))
+std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttributeForBindings(const QualifiedName& attributeName) const
+{
+    ASSERT(isElementsArrayReflectionAttribute(attributeName));
+    std::optional<Vector<Ref<Element>>> elements = getElementsArrayForAttributeInternal(attributeName);
+    if (!elements)
         return std::nullopt;
-
-    SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
-    return WTF::compactMap(ids, [&](auto& id) {
-        return getElementByIdIncludingDisconnected(*this, id);
+    return compactMap(elements.value(), [&](Ref<Element>& element) -> std::optional<Ref<Element>> {
+        Ref<Node> retargeted = treeScope().retargetToScope(element);
+        ASSERT(retargeted->isElementNode());
+        return *dynamicDowncast<Element>(retargeted);
     });
 }
 
@@ -3201,23 +3250,35 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
         init.clonable ? ShadowRoot::Clonable::Yes : ShadowRoot::Clonable::No,
         init.serializable ? ShadowRoot::Serializable::Yes : ShadowRoot::Serializable::No,
         isPrecustomizedOrDefinedCustomElement() ? ShadowRoot::AvailableToElementInternals::Yes : ShadowRoot::AvailableToElementInternals::No,
-        WTFMove(registry), init.registry ? ShadowRoot::ScopedCustomElementRegistry::Yes : ShadowRoot::ScopedCustomElementRegistry::No);
+                                    WTFMove(registry), init.registry ? ShadowRoot::ScopedCustomElementRegistry::Yes : ShadowRoot::ScopedCustomElementRegistry::No);
+#if ENABLE(REFERENCE_TARGET)
+    shadow->setReferenceTarget(AtomString(init.referenceTarget));
+#endif
     addShadowRoot(shadow.copyRef());
     return shadow.get();
 }
 
+#if ENABLE(REFERENCE_TARGET)
+ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, ShadowRootDelegatesFocus delegatesFocus, ShadowRootClonable clonable, ShadowRootSerializable serializable, AtomString referenceTarget)
+#else
 ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, ShadowRootDelegatesFocus delegatesFocus, ShadowRootClonable clonable, ShadowRootSerializable serializable)
+#endif
 {
     if (this->shadowRoot())
         return Exception { ExceptionCode::NotSupportedError };
-    auto exceptionOrShadowRoot = attachShadow({
+    ShadowRootInit init{
         mode,
         delegatesFocus == ShadowRootDelegatesFocus::Yes,
         clonable == ShadowRootClonable::Yes,
         serializable == ShadowRootSerializable::Yes,
         SlotAssignmentMode::Named,
         nullptr,
-    });
+#if ENABLE(REFERENCE_TARGET)
+        referenceTarget,
+#endif
+    };
+    init.referenceTarget = referenceTarget;
+    auto exceptionOrShadowRoot = attachShadow(init);
     if (exceptionOrShadowRoot.hasException())
         return exceptionOrShadowRoot.releaseException();
     Ref shadowRoot = exceptionOrShadowRoot.releaseReturnValue();
@@ -3237,6 +3298,25 @@ RefPtr<ShadowRoot> Element::shadowRootForBindings(JSC::JSGlobalObject& lexicalGl
         return shadow;
     return nullptr;
 }
+
+#if ENABLE(REFERENCE_TARGET)
+RefPtr<Element> Element::deepShadowRootReferenceTargetOrSelf() {
+    return const_cast<Element*>(const_cast<const Element*>(this)->deepShadowRootReferenceTargetOrSelf().get());
+}
+
+RefPtr<const Element> Element::deepShadowRootReferenceTargetOrSelf() const {
+    RefPtr<const Element> element = this;
+
+    ShadowRoot* shadow = shadowRoot();
+    while (shadow && shadow->hasReferenceTarget()) {
+        element = shadow->referenceTargetElementOrHost();
+        if (!element)
+            return nullptr;
+        shadow = element->shadowRoot();
+    }
+    return element;
+}
+#endif
 
 ShadowRoot* Element::userAgentShadowRoot() const
 {

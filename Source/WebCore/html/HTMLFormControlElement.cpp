@@ -371,7 +371,7 @@ RefPtr<HTMLElement> HTMLFormControlElement::popoverTargetElement() const
     if (form() && isSubmitButton())
         return nullptr;
 
-    RefPtr element = dynamicDowncast<HTMLElement>(getElementAttribute(popovertargetAttr));
+    RefPtr element = dynamicDowncast<HTMLElement>(getElementForAttributeInternal(popovertargetAttr));
     if (element && element->popoverState() != PopoverState::None)
         return element;
     return nullptr;
@@ -433,7 +433,7 @@ RefPtr<Element> HTMLFormControlElement::commandForElement() const
     if (!canInvoke(*this))
         return nullptr;
 
-    return getElementAttribute(commandforAttr);
+    return getElementForAttributeInternal(commandforAttr);
 }
 
 constexpr ASCIILiteral togglePopoverLiteral = "togglepopover"_s;

@@ -50,6 +50,11 @@ public:
 
     const AtomString& shadowRootMode() const;
     void setShadowRootMode(const AtomString&);
+    
+#if ENABLE(REFERENCE_TARGET)
+    const AtomString& shadowRootReferenceTarget() const;
+    void setShadowRootReferenceTarget(const AtomString&);
+#endif
 
     void setDeclarativeShadowRoot(ShadowRoot&);
     void attachAsDeclarativeShadowRootIfNeeded(Element&);

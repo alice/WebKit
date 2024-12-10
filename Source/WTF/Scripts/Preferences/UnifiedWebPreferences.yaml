@@ -6810,6 +6810,22 @@ ServiceWorkersUserGestureEnabled:
     WebCore:
       default: true
 
+ShadowRootReferenceTargetEnabled:
+  type: bool
+  status: unstable
+  category: dom
+  condition: ENABLE(REFERENCE_TARGET)
+  humanReadableName: "referenceTarget"
+  humanReadableDescription: "Enable setting a referenceTarget on shadow roots"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+  sharedPreferenceForWebProcess: true
+
 # When enabling this, don't enable on watchOS or the macOS base system (which don't have Vision.framework).
 # You can detect these by running isVisionFrameworkAvailable().
 ShapeDetection:

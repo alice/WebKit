@@ -189,14 +189,14 @@ void TextFieldInputType::setValue(const String& sanitizedValue, bool valueChange
 #if ENABLE(DATALIST_ELEMENT)
 void TextFieldInputType::handleClickEvent(MouseEvent&)
 {
-    if (element()->focused() && element()->list())
+    if (element()->focused() && element()->dataList())
         displaySuggestions(DataListSuggestionActivationType::ControlClicked);
 }
 
 void TextFieldInputType::showPicker()
 {
 #if !PLATFORM(IOS_FAMILY)
-    if (element()->list())
+    if (element()->dataList())
         displaySuggestions(DataListSuggestionActivationType::ControlClicked);
 #endif
 }

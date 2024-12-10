@@ -85,7 +85,7 @@ JSValue toJSNewlyCreated(JSGlobalObject*, JSDOMGlobalObject* globalObject, Ref<E
     return createNewElementWrapper(globalObject, WTFMove(element));
 }
 
-static JSValue getElementsArrayAttribute(JSGlobalObject& lexicalGlobalObject, const JSElement& thisObject, const QualifiedName& attributeName)
+static JSValue getElementsArrayAttributeForBindings(JSGlobalObject& lexicalGlobalObject, const JSElement& thisObject, const QualifiedName& attributeName)
 {
     auto& vm = JSC::getVM(&lexicalGlobalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
@@ -99,7 +99,7 @@ static JSValue getElementsArrayAttribute(JSGlobalObject& lexicalGlobalObject, co
         const_cast<JSElement&>(thisObject).putDirect(vm, builtinNames(vm).cachedAttrAssociatedElementsPrivateName(), cachedObject);
     }
 
-    std::optional<Vector<Ref<Element>>> elements = thisObject.wrapped().getElementsArrayAttribute(attributeName);
+    std::optional<Vector<Ref<Element>>> elements = thisObject.wrapped().getElementsArrayAttributeForBindings(attributeName);
     auto propertyName = PropertyName(Identifier::fromString(vm, attributeName.toString()));
     JSValue cachedValue = cachedObject->getDirect(vm, propertyName);
     if (!cachedValue.isEmpty()) {
@@ -115,37 +115,37 @@ static JSValue getElementsArrayAttribute(JSGlobalObject& lexicalGlobalObject, co
 
 JSValue JSElement::ariaControlsElements(JSGlobalObject& lexicalGlobalObject) const
 {
-    return getElementsArrayAttribute(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_controlsAttr);
+    return getElementsArrayAttributeForBindings(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_controlsAttr);
 }
 
 JSValue JSElement::ariaDescribedByElements(JSGlobalObject& lexicalGlobalObject) const
 {
-    return getElementsArrayAttribute(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_describedbyAttr);
+    return getElementsArrayAttributeForBindings(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_describedbyAttr);
 }
 
 JSValue JSElement::ariaDetailsElements(JSGlobalObject& lexicalGlobalObject) const
 {
-    return getElementsArrayAttribute(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_detailsAttr);
+    return getElementsArrayAttributeForBindings(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_detailsAttr);
 }
 
 JSValue JSElement::ariaErrorMessageElements(JSGlobalObject& lexicalGlobalObject) const
 {
-    return getElementsArrayAttribute(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_errormessageAttr);
+    return getElementsArrayAttributeForBindings(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_errormessageAttr);
 }
 
 JSValue JSElement::ariaFlowToElements(JSGlobalObject& lexicalGlobalObject) const
 {
-    return getElementsArrayAttribute(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_flowtoAttr);
+    return getElementsArrayAttributeForBindings(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_flowtoAttr);
 }
 
 JSValue JSElement::ariaLabelledByElements(JSGlobalObject& lexicalGlobalObject) const
 {
-    return getElementsArrayAttribute(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_labelledbyAttr);
+    return getElementsArrayAttributeForBindings(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_labelledbyAttr);
 }
 
 JSValue JSElement::ariaOwnsElements(JSGlobalObject& lexicalGlobalObject) const
 {
-    return getElementsArrayAttribute(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_ownsAttr);
+    return getElementsArrayAttributeForBindings(lexicalGlobalObject, *this, WebCore::HTMLNames::aria_ownsAttr);
 }
 
 } // namespace WebCore

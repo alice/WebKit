@@ -62,8 +62,8 @@ public:
     enum class ScopedCustomElementRegistry : bool { No, Yes };
 
     static Ref<ShadowRoot> create(Document& document, ShadowRootMode type, SlotAssignmentMode assignmentMode = SlotAssignmentMode::Named,
-        DelegatesFocus delegatesFocus = DelegatesFocus::No, Clonable clonable = Clonable::No, Serializable serializable = Serializable::No, AvailableToElementInternals availableToElementInternals = AvailableToElementInternals::No,
-        RefPtr<CustomElementRegistry>&& registry = nullptr, ScopedCustomElementRegistry scopedRegistry = ScopedCustomElementRegistry::No)
+                                  DelegatesFocus delegatesFocus = DelegatesFocus::No, Clonable clonable = Clonable::No, Serializable serializable = Serializable::No, AvailableToElementInternals availableToElementInternals = AvailableToElementInternals::No,
+                                  RefPtr<CustomElementRegistry>&& registry = nullptr, ScopedCustomElementRegistry scopedRegistry = ScopedCustomElementRegistry::No)
     {
         return adoptRef(*new ShadowRoot(document, type, assignmentMode, delegatesFocus, clonable, serializable, availableToElementInternals, WTFMove(registry), scopedRegistry));
     }
@@ -150,20 +150,27 @@ public:
 #endif
 
     Vector<RefPtr<WebAnimation>> getAnimations();
+    
+#if ENABLE(REFERENCE_TARGET)
+    bool hasReferenceTarget() const;
+    const AtomString& referenceTarget() const;
+    void setReferenceTarget(const AtomString& referenceTarget);
+    RefPtr<Element> referenceTargetElementOrHost() const;
+#endif
 
 private:
     ShadowRoot(Document&, ShadowRootMode, SlotAssignmentMode, DelegatesFocus, Clonable, Serializable, AvailableToElementInternals, RefPtr<CustomElementRegistry>&&, ScopedCustomElementRegistry);
     ShadowRoot(Document&, std::unique_ptr<SlotAssignment>&&);
-
+    
     bool childTypeAllowed(NodeType) const override;
-
+    
     Node::InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) override;
     void removedFromAncestor(RemovalType, ContainerNode& insertionPoint) override;
-
+    
     void childrenChanged(const ChildChange&) override;
-
+    
     ExceptionOr<void> replaceChildrenWithMarkup(const String&, OptionSet<ParserContentPolicy>);
-
+    
     bool m_hasBegunDeletingDetachedChildren : 1 { false };
     bool m_delegatesFocus : 1 { false };
     bool m_isClonable : 1 { false };
@@ -181,6 +188,10 @@ private:
     std::unique_ptr<Style::Scope> m_styleScope;
     std::unique_ptr<SlotAssignment> m_slotAssignment;
     mutable std::optional<PartMappings> m_partMappings;
+    
+#if ENABLE(REFERENCE_TARGET)
+    AtomString m_referenceTarget;
+#endif
 };
 
 inline Element* ShadowRoot::activeElement() const

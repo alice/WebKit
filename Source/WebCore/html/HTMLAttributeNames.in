@@ -394,6 +394,7 @@ selected
 shadowrootclonable
 shadowrootdelegatesfocus
 shadowrootmode
+shadowrootreferencetarget
 shadowrootserializable
 shape
 size
