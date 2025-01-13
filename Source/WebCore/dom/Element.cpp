@@ -2327,7 +2327,7 @@ ExplicitlySetAttrElementsMap* Element::explicitlySetAttrElementsMapIfExists() co
     return hasRareData() ? &elementRareData()->explicitlySetAttrElementsMap() : nullptr;
 }
 
-static RefPtr<Element> getElementByIdIncludingDisconnected(const Element& startElement, const AtomString& id)
+static RefPtr<Element> getElementByIdInternalIncludingDisconnected(const Element& startElement, const AtomString& id)
 {
     if (id.isEmpty())
         return nullptr;
@@ -2349,26 +2349,45 @@ static RefPtr<Element> getElementByIdIncludingDisconnected(const Element& startE
     return nullptr;
 }
 
-RefPtr<Element> Element::getElementAttribute(const QualifiedName& attributeName) const
+RefPtr<Element> Element::getElementForAttributeInternal(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
+    RefPtr<Element> element = nullptr;
+    bool hasExplicitlySetElement = false;
 
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
         auto it = map->find(attributeName);
         if (it != map->end()) {
             ASSERT(it->value.size() == 1);
-            RefPtr element = it->value[0].get();
-            if (element && isDescendantOrShadowDescendantOf(element->rootNode()))
-                return element;
-            return nullptr;
+            hasExplicitlySetElement = true;
+            RefPtr explicitlySetElement = it->value[0].get();
+            if (explicitlySetElement && isDescendantOrShadowDescendantOf(explicitlySetElement->rootNode()))
+                element = explicitlySetElement;
         }
     }
 
-    auto id = getAttribute(attributeName);
-    if (id.isNull())
+    if (!hasExplicitlySetElement) {
+        const AtomString& id = getAttribute(attributeName);
+        element = getElementByIdInternalIncludingDisconnected(*this, id);
+    }
+
+    if (element == nullptr)
         return nullptr;
 
-    return getElementByIdIncludingDisconnected(*this, id);
+    return element->deepShadowRootReferenceTargetOrSelf();
+}
+
+RefPtr<Element> Element::getElementAttributeForBindings(const QualifiedName& attributeName) const
+{
+    ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
+    RefPtr element = getElementForAttributeInternal(attributeName);
+
+    if (!element)
+        return nullptr;
+
+    if (document().settings().shadowRootReferenceTargetEnabled())
+        return downcast<Element>(treeScope().retargetToScope(*element));
+
+    return element;
 }
 
 void Element::setElementAttribute(const QualifiedName& attributeName, Element* element)
@@ -2390,13 +2409,16 @@ void Element::setElementAttribute(const QualifiedName& attributeName, Element* e
         cache->updateRelations(*this, attributeName);
 }
 
-std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const QualifiedName& attributeName) const
+std::optional<Vector<Ref<Element>>> Element::getElementsArrayForAttributeInternal(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementsArrayReflectionAttribute(attributeName));
+    std::optional<Vector<Ref<Element>>> elements;
+    bool hasExplicitlySetElements = false;
 
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
-        if (auto it = map->find(attributeName); it != map->end()) {
-            return compactMap(it->value, [&](auto& weakElement) -> std::optional<Ref<Element>> {
+        auto it = map->find(attributeName);
+        if (it != map->end()) {
+            hasExplicitlySetElements = true;
+            elements = compactMap(it->value, [&](auto& weakElement) -> std::optional<Ref<Element>> {
                 RefPtr element = weakElement.get();
                 if (element && isDescendantOrShadowDescendantOf(element->rootNode()))
                     return element.releaseNonNull();
@@ -2405,17 +2427,46 @@ std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const Qua
         }
     }
 
-    auto attr = attributeName;
-    if (attr == HTMLNames::aria_labelledbyAttr && !hasAttribute(HTMLNames::aria_labelledbyAttr) && hasAttribute(HTMLNames::aria_labeledbyAttr))
-        attr = HTMLNames::aria_labeledbyAttr;
+    if (!hasExplicitlySetElements) {
+        auto attr = attributeName;
+        if (attr == HTMLNames::aria_labelledbyAttr && !hasAttribute(HTMLNames::aria_labelledbyAttr) && hasAttribute(HTMLNames::aria_labeledbyAttr))
+            attr = HTMLNames::aria_labeledbyAttr;
 
-    if (!hasAttribute(attr))
+        SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
+        elements = compactMap(ids, [&](auto& id) {
+            return getElementByIdInternalIncludingDisconnected(*this, id);
+        });
+    }
+
+    if (!elements.has_value())
+        return elements;
+
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        elements = compactMap(elements.value(), [&](Ref<Element>& element) -> std::optional<Ref<Element>> {
+            if (RefPtr deepReferenceTarget = element->deepShadowRootReferenceTargetOrSelf())
+                return *deepReferenceTarget;
+            return std::nullopt;
+        });
+    }
+
+    return elements;
+}
+
+std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttributeForBindings(const QualifiedName& attributeName) const
+{
+    ASSERT(isElementsArrayReflectionAttribute(attributeName));
+    std::optional<Vector<Ref<Element>>> elements = getElementsArrayForAttributeInternal(attributeName);
+
+    if (!elements)
         return std::nullopt;
 
-    SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
-    return WTF::compactMap(ids, [&](auto& id) {
-        return getElementByIdIncludingDisconnected(*this, id);
-    });
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        elements = compactMap(elements.value(), [&](Ref<Element>& element) -> std::optional<Ref<Element>> {
+            return downcast<Element>(treeScope().retargetToScope(element));
+        });
+    }
+
+    return elements;
 }
 
 void Element::setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<Ref<Element>>>&& elements)
@@ -3204,11 +3255,12 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
         init.serializable ? ShadowRoot::Serializable::Yes : ShadowRoot::Serializable::No,
         isPrecustomizedOrDefinedCustomElement() ? ShadowRoot::AvailableToElementInternals::Yes : ShadowRoot::AvailableToElementInternals::No,
         WTFMove(registry), init.registry ? ShadowRoot::ScopedCustomElementRegistry::Yes : ShadowRoot::ScopedCustomElementRegistry::No);
+    shadow->setReferenceTarget(AtomString(init.referenceTarget));
     addShadowRoot(shadow.copyRef());
     return shadow.get();
 }
 
-ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, ShadowRootDelegatesFocus delegatesFocus, ShadowRootClonable clonable, ShadowRootSerializable serializable)
+ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, ShadowRootDelegatesFocus delegatesFocus, ShadowRootClonable clonable, ShadowRootSerializable serializable, AtomString referenceTarget)
 {
     if (this->shadowRoot())
         return Exception { ExceptionCode::NotSupportedError };
@@ -3219,6 +3271,7 @@ ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, S
         serializable == ShadowRootSerializable::Yes,
         SlotAssignmentMode::Named,
         nullptr,
+        referenceTarget,
     });
     if (exceptionOrShadowRoot.hasException())
         return exceptionOrShadowRoot.releaseException();
@@ -3238,6 +3291,26 @@ RefPtr<ShadowRoot> Element::shadowRootForBindings(JSC::JSGlobalObject& lexicalGl
     if (JSC::jsCast<JSDOMGlobalObject*>(&lexicalGlobalObject)->world().shadowRootIsAlwaysOpen())
         return shadow;
     return nullptr;
+}
+
+RefPtr<Element> Element::deepShadowRootReferenceTargetOrSelf()
+{
+    return const_cast<Element*>(const_cast<const Element*>(this)->deepShadowRootReferenceTargetOrSelf().get());
+}
+
+RefPtr<const Element> Element::deepShadowRootReferenceTargetOrSelf() const
+{
+    if (!document().settings().shadowRootReferenceTargetEnabled())
+        return this;
+
+    RefPtr<const Element> element = this;
+
+    RefPtr shadow = shadowRoot();
+    while (shadow && shadow->hasReferenceTarget()) {
+        element = shadow->referenceTargetElementOrHost();
+        shadow = element ? element->shadowRoot() : nullptr;
+    }
+    return element;
 }
 
 ShadowRoot* Element::userAgentShadowRoot() const

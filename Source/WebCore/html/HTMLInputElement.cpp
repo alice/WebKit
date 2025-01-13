@@ -1888,6 +1888,19 @@ Vector<Color> HTMLInputElement::suggestedColors() const
 
 RefPtr<HTMLElement> HTMLInputElement::list() const
 {
+    auto list = dataList();
+
+    if (!list)
+        return nullptr;
+
+    if (document().settings().shadowRootReferenceTargetEnabled() && &list->treeScope() != &treeScope())
+        return nullptr;
+
+    return list;
+}
+
+bool HTMLInputElement::hasDataList() const
+{
     return dataList();
 }
 
@@ -1896,7 +1909,7 @@ RefPtr<HTMLDataListElement> HTMLInputElement::dataList() const
     if (!m_hasNonEmptyList || !m_inputType->shouldRespectListAttribute())
         return nullptr;
 
-    return dynamicDowncast<HTMLDataListElement>(treeScope().getElementById(attributeWithoutSynchronization(listAttr)));
+    return dynamicDowncast<HTMLDataListElement>(getElementForAttributeInternal(listAttr));
 }
 
 void HTMLInputElement::resetListAttributeTargetObserver()

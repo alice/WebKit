@@ -91,8 +91,10 @@ RefPtr<Element> CustomElementDefaultARIA::elementForAttribute(const Element& thi
 
     RefPtr<Element> result;
     std::visit(WTF::makeVisitor([&](const AtomString& stringValue) {
-        if (thisElement.isInTreeScope())
-            result = thisElement.treeScope().getElementById(stringValue);
+        if (thisElement.isInTreeScope()) {
+            RefPtr<Element> elementForId = thisElement.treeScope().getElementById(stringValue);
+            result = elementForId ? elementForId->deepShadowRootReferenceTargetOrSelf() : nullptr;
+        }
     }, [&](const WeakPtr<Element, WeakPtrImplWithEventTargetData>& weakElementValue) {
         RefPtr elementValue = weakElementValue.get();
         if (elementValue && isElementVisible(*elementValue, thisElement))
@@ -118,7 +120,8 @@ Vector<Ref<Element>> CustomElementDefaultARIA::elementsForAttribute(const Elemen
         if (thisElement.isInTreeScope()) {
             SpaceSplitString idList { stringValue, SpaceSplitString::ShouldFoldCase::No };
             result = WTF::compactMap(idList, [&](auto& id) {
-                return thisElement.treeScope().getElementById(id);
+                RefPtr<Element> elementForId = thisElement.treeScope().getElementById(id);
+                return elementForId ? elementForId->deepShadowRootReferenceTargetOrSelf() : nullptr;
             });
         }
     }, [&](const WeakPtr<Element, WeakPtrImplWithEventTargetData>& weakElementValue) {

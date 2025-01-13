@@ -44,9 +44,9 @@ WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(HTMLLabelElement);
 
 using namespace HTMLNames;
 
-static HTMLElement* firstElementWithIdIfLabelable(TreeScope& treeScope, const AtomString& id)
+static HTMLElement* elementForAttributeIfLabelable(const HTMLLabelElement& context, const QualifiedName& attributeName)
 {
-    if (RefPtr element = treeScope.getElementById(id)) {
+    if (RefPtr element = context.getElementForAttributeInternal(attributeName)) {
         if (auto* labelableElement = dynamicDowncast<HTMLElement>(*element)) {
             if (labelableElement->isLabelable())
                 return labelableElement;
@@ -73,18 +73,36 @@ Ref<HTMLLabelElement> HTMLLabelElement::create(Document& document)
 
 RefPtr<HTMLElement> HTMLLabelElement::control() const
 {
-    auto& controlId = attributeWithoutSynchronization(forAttr);
-    if (controlId.isNull()) {
+    if (!hasAttributeWithoutSynchronization(forAttr)) {
         // Search the children and descendants of the label element for a form element.
         // per http://dev.w3.org/html5/spec/Overview.html#the-label-element
         // the form element must be "labelable form-associated element".
-        for (const auto& labelableElement : descendantsOfType<HTMLElement>(*this)) {
-            if (labelableElement.isLabelable())
-                return const_cast<HTMLElement*>(&labelableElement);
+        for (const HTMLElement& descendant : descendantsOfType<HTMLElement>(*this)) {
+            if (document().settings().shadowRootReferenceTargetEnabled()) {
+                RefPtr referenceTarget = dynamicDowncast<const HTMLElement>(descendant.deepShadowRootReferenceTargetOrSelf());
+                if (referenceTarget && referenceTarget->isLabelable())
+                    return const_cast<HTMLElement*>(referenceTarget.get());
+            } else if (descendant.isLabelable()) {
+                return const_cast<HTMLElement*>(&descendant);
+            }
         }
         return nullptr;
     }
-    return isConnected() ? firstElementWithIdIfLabelable(treeScope(), controlId) : nullptr;
+    return isConnected() ? elementForAttributeIfLabelable(*this, forAttr) : nullptr;
+}
+
+RefPtr<HTMLElement> HTMLLabelElement::controlForBindings() const
+{
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        RefPtr<HTMLElement> control = this->control();
+        if (!control)
+            return nullptr;
+
+        Ref<Node> retargeted = treeScope().retargetToScope(*control);
+        return downcast<HTMLElement>(retargeted);
+    }
+
+    return control();
 }
 
 HTMLFormElement* HTMLLabelElement::form() const
@@ -94,6 +112,17 @@ HTMLFormElement* HTMLLabelElement::form() const
             return listedElement->form();
     }
     return nullptr;
+}
+
+HTMLFormElement* HTMLLabelElement::formForBindings() const
+{
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        auto* form = this->form();
+        if (!form || &form->treeScope() != &treeScope())
+            return nullptr;
+        return form;
+    }
+    return form();
 }
 
 void HTMLLabelElement::setActive(bool down, Style::InvalidationScope invalidationScope)
