@@ -183,14 +183,14 @@ void TextFieldInputType::setValue(const String& sanitizedValue, bool valueChange
 
 void TextFieldInputType::handleClickEvent(MouseEvent&)
 {
-    if (element()->focused() && element()->list())
+    if (element()->focused() && element()->hasDataList())
         displaySuggestions(DataListSuggestionActivationType::ControlClicked);
 }
 
 void TextFieldInputType::showPicker()
 {
 #if !PLATFORM(IOS_FAMILY)
-    if (element()->list())
+    if (element()->hasDataList())
         displaySuggestions(DataListSuggestionActivationType::ControlClicked);
 #endif
 }
@@ -334,7 +334,7 @@ void TextFieldInputType::createShadowSubtree()
     bool shouldHaveSpinButton = this->shouldHaveSpinButton();
     bool shouldHaveCapsLockIndicator = this->shouldHaveCapsLockIndicator();
     bool shouldDrawAutoFillButton = this->shouldDrawAutoFillButton();
-    bool hasDataList = element()->list();
+    bool hasDataList = element()->hasDataList();
     bool createsContainer = shouldHaveSpinButton || shouldHaveCapsLockIndicator || shouldDrawAutoFillButton || hasDataList || needsContainer();
 
     Ref innerText = TextControlInnerTextElement::create(document, element()->isInnerTextElementEditable());
@@ -698,7 +698,7 @@ void TextFieldInputType::didSetValueByUserEdit()
         return;
     if (RefPtr frame = element()->document().frame())
         frame->editor().textDidChangeInTextField(*element());
-    if (element()->list())
+    if (element()->hasDataList())
         displaySuggestions(DataListSuggestionActivationType::TextChanged);
 }
 
@@ -897,7 +897,7 @@ void TextFieldInputType::dataListMayHaveChanged()
     if (!element())
         return;
     m_dataListDropdownIndicator->setInlineStyleProperty(CSSPropertyDisplay, element()->list() ? CSSValueBlock : CSSValueNone, IsImportant::Yes);
-    if (element()->list() && element()->focused())
+    if (element()->hasDataList() && element()->focused())
         displaySuggestions(DataListSuggestionActivationType::DataListMayHaveChanged);
 }
 
@@ -909,7 +909,7 @@ HTMLElement* TextFieldInputType::dataListButtonElement() const
 void TextFieldInputType::dataListButtonElementWasClicked()
 {
     Ref<HTMLInputElement> input(*element());
-    if (input->list()) {
+    if (input->hasDataList()) {
         m_isFocusingWithDataListDropdown = true;
         unsigned max = visibleValue().length();
         input->setSelectionRange(max, max);
