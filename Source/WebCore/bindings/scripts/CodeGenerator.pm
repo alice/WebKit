@@ -1128,9 +1128,7 @@ sub GetterExpression
     } elsif ($attributeType->name eq "unsigned long") {
         $functionName = "getUnsignedIntegralAttribute";
     } elsif ($attributeType->name eq "Element") {
-        $functionName = "getElementAttribute";
-    } elsif ($attributeType->name eq "FrozenArray" && scalar @{$attributeType->subtypes} == 1 && @{$attributeType->subtypes}[0]->name eq "Element") {
-        $functionName = "getElementsArrayAttribute";
+        $functionName = "getElementAttributeForBindings";
     } else {
         if ($contentAttributeName eq "WebCore::HTMLNames::idAttr") {
             $functionName = "getIdAttribute";

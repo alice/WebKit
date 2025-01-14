@@ -44,9 +44,9 @@ WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(HTMLLabelElement);
 
 using namespace HTMLNames;
 
-static HTMLElement* firstElementWithIdIfLabelable(TreeScope& treeScope, const AtomString& id)
+static HTMLElement* elementForAttributeIfLabelable(const HTMLLabelElement& context, const QualifiedName& attributeName)
 {
-    if (RefPtr element = treeScope.getElementById(id)) {
+    if (RefPtr element = context.getElementForAttributeInternal(attributeName)) {
         if (auto* labelableElement = dynamicDowncast<HTMLElement>(*element)) {
             if (labelableElement->isLabelable())
                 return labelableElement;
@@ -73,18 +73,17 @@ Ref<HTMLLabelElement> HTMLLabelElement::create(Document& document)
 
 RefPtr<HTMLElement> HTMLLabelElement::control() const
 {
-    auto& controlId = attributeWithoutSynchronization(forAttr);
-    if (controlId.isNull()) {
+    if (!hasAttributeWithoutSynchronization(forAttr)) {
         // Search the children and descendants of the label element for a form element.
         // per http://dev.w3.org/html5/spec/Overview.html#the-label-element
         // the form element must be "labelable form-associated element".
-        for (const auto& labelableElement : descendantsOfType<HTMLElement>(*this)) {
+        for (const HTMLElement& labelableElement : descendantsOfType<HTMLElement>(*this)) {
             if (labelableElement.isLabelable())
                 return const_cast<HTMLElement*>(&labelableElement);
         }
         return nullptr;
     }
-    return isConnected() ? firstElementWithIdIfLabelable(treeScope(), controlId) : nullptr;
+    return isConnected() ? elementForAttributeIfLabelable(*this, forAttr) : nullptr;
 }
 
 RefPtr<HTMLElement> HTMLLabelElement::controlForBindings() const

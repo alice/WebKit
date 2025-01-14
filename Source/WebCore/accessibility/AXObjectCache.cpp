@@ -5275,10 +5275,10 @@ bool AXObjectCache::addRelation(Element& origin, const QualifiedName& attribute)
     if (!m_document)
         return false;
     if (Element::isElementReflectionAttribute(Ref { m_document->settings() }, attribute)) {
-        if (auto reflectedElement = origin.getElementAttribute(attribute))
+        if (auto reflectedElement = origin.getElementForAttributeInternal(attribute))
             return addRelation(origin, *reflectedElement, relationType);
     } else if (Element::isElementsArrayReflectionAttribute(attribute)) {
-        if (auto reflectedElements = origin.getElementsArrayAttribute(attribute)) {
+        if (auto reflectedElements = origin.getElementsArrayForAttributeInternal(attribute)) {
             for (auto reflectedElement : reflectedElements.value()) {
                 if (addRelation(origin, reflectedElement, relationType))
                     addedRelation = true;

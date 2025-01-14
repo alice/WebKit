@@ -2327,9 +2327,9 @@ ExplicitlySetAttrElementsMap* Element::explicitlySetAttrElementsMapIfExists() co
     return hasRareData() ? &elementRareData()->explicitlySetAttrElementsMap() : nullptr;
 }
 
-static RefPtr<Element> getElementByIdIncludingDisconnected(const Element& startElement, const AtomString& id)
+static RefPtr<Element> getElementByIdInternalIncludingDisconnected(const Element& startElement, const AtomString& id)
 {
-    if (id.isEmpty())
+    if (id.isNull() || id.isEmpty())
         return nullptr;
 
     if (LIKELY(startElement.isInTreeScope()))
@@ -2349,26 +2349,34 @@ static RefPtr<Element> getElementByIdIncludingDisconnected(const Element& startE
     return nullptr;
 }
 
-RefPtr<Element> Element::getElementAttribute(const QualifiedName& attributeName) const
+RefPtr<Element> Element::getElementForAttributeInternal(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
+    RefPtr<Element> element = nullptr;
+    bool hasExplicitlySetElement = false;
 
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
         auto it = map->find(attributeName);
         if (it != map->end()) {
             ASSERT(it->value.size() == 1);
-            RefPtr element = it->value[0].get();
-            if (element && isDescendantOrShadowDescendantOf(element->rootNode()))
-                return element;
-            return nullptr;
+            hasExplicitlySetElement = true;
+            RefPtr explicitlySetElement = it->value[0].get();
+            if (explicitlySetElement && isDescendantOrShadowDescendantOf(explicitlySetElement->rootNode()))
+                element = explicitlySetElement;
         }
     }
+    
+    if (!hasExplicitlySetElement) {
+    const AtomString& id = getAttribute(attributeName);
+        element = getElementByIdInternalIncludingDisconnected(*this, id);
+    }
 
-    auto id = getAttribute(attributeName);
-    if (id.isNull())
-        return nullptr;
+    return element;
+}
 
-    return getElementByIdIncludingDisconnected(*this, id);
+RefPtr<Element> Element::getElementAttributeForBindings(const QualifiedName& attributeName) const
+{
+    ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
+    return getElementForAttributeInternal(attributeName);
 }
 
 void Element::setElementAttribute(const QualifiedName& attributeName, Element* element)
@@ -2390,13 +2398,16 @@ void Element::setElementAttribute(const QualifiedName& attributeName, Element* e
         cache->updateRelations(*this, attributeName);
 }
 
-std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const QualifiedName& attributeName) const
+std::optional<Vector<Ref<Element>>> Element::getElementsArrayForAttributeInternal(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementsArrayReflectionAttribute(attributeName));
+    std::optional<Vector<Ref<Element>>> elements;
+    bool hasExplicitlySetElements = false;
 
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
-        if (auto it = map->find(attributeName); it != map->end()) {
-            return compactMap(it->value, [&](auto& weakElement) -> std::optional<Ref<Element>> {
+        auto it = map->find(attributeName);
+        if (it != map->end()) {
+            hasExplicitlySetElements = true;
+            elements = compactMap(it->value, [&](auto& weakElement) -> std::optional<Ref<Element>> {
                 RefPtr element = weakElement.get();
                 if (element && isDescendantOrShadowDescendantOf(element->rootNode()))
                     return element.releaseNonNull();
@@ -2405,17 +2416,24 @@ std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const Qua
         }
     }
 
-    auto attr = attributeName;
-    if (attr == HTMLNames::aria_labelledbyAttr && !hasAttribute(HTMLNames::aria_labelledbyAttr) && hasAttribute(HTMLNames::aria_labeledbyAttr))
-        attr = HTMLNames::aria_labeledbyAttr;
+    if (!hasExplicitlySetElements) {
+        auto attr = attributeName;
+        if (attr == HTMLNames::aria_labelledbyAttr && !hasAttribute(HTMLNames::aria_labelledbyAttr) && hasAttribute(HTMLNames::aria_labeledbyAttr))
+            attr = HTMLNames::aria_labeledbyAttr;
 
-    if (!hasAttribute(attr))
-        return std::nullopt;
+        SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
+        elements = compactMap(ids, [&](auto& id) {
+            return getElementByIdInternalIncludingDisconnected(*this, id);
+        });
+    }
 
-    SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
-    return WTF::compactMap(ids, [&](auto& id) {
-        return getElementByIdIncludingDisconnected(*this, id);
-    });
+    return elements;
+}
+
+std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttributeForBindings(const QualifiedName& attributeName) const
+{
+    ASSERT(isElementsArrayReflectionAttribute(attributeName));
+    return getElementsArrayForAttributeInternal(attributeName);
 }
 
 void Element::setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<Ref<Element>>>&& elements)

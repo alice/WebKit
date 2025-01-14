@@ -3257,11 +3257,10 @@ bool AccessibilityObject::hasDatalist() const
         return false;
 
     auto element = this->element();
-    if (!element)
+    if (!element || !is<HTMLInputElement>(element))
         return false;
 
-    auto datalist = element->treeScope().getElementById(datalistId);
-    return is<HTMLDataListElement>(datalist);
+    return dynamicDowncast<HTMLInputElement>(element)->hasDataList();
 }
 
 bool AccessibilityObject::supportsSetSize() const
@@ -4048,31 +4047,15 @@ Vector<Ref<Element>> AccessibilityObject::elementsFromAttribute(const QualifiedN
     if (!element)
         return { };
 
-    if (Element::isElementReflectionAttribute(document()->settings(), attribute)) {
-        if (RefPtr reflectedElement = element->getElementAttribute(attribute)) {
-            Vector<Ref<Element>> elements;
-            elements.append(reflectedElement.releaseNonNull());
-            return elements;
-        }
-    } else if (Element::isElementsArrayReflectionAttribute(attribute)) {
-        if (auto reflectedElements = element->getElementsArrayAttribute(attribute)) {
-            return reflectedElements.value();
-        }
+    if (auto elementsFromAttribute = element->getElementsArrayForAttributeInternal(attribute)) {
+        return elementsFromAttribute.value();
     }
 
-    auto& idsString = getAttribute(attribute);
-    if (idsString.isEmpty()) {
         if (auto* defaultARIA = element->customElementDefaultARIAIfExists()) {
             return defaultARIA->elementsForAttribute(*element, attribute);
         }
-        return { };
-    }
 
-    auto& treeScope = element->treeScope();
-    SpaceSplitString ids(idsString, SpaceSplitString::ShouldFoldCase::No);
-    return WTF::compactMap(ids, [&](auto& id) {
-        return treeScope.getElementById(id);
-    });
+        return { };
 }
 
 #if PLATFORM(COCOA)
