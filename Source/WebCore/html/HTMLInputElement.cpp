@@ -1888,7 +1888,15 @@ Vector<Color> HTMLInputElement::suggestedColors() const
 
 RefPtr<HTMLElement> HTMLInputElement::list() const
 {
-    return dataList();
+    auto list = dataList();
+
+    if (!list)
+        return nullptr;
+
+    if (document().settings().shadowRootReferenceTargetEnabled() && &list->treeScope() != &treeScope())
+        return nullptr;
+
+    return list;
 }
 
 bool HTMLInputElement::hasDataList() const {

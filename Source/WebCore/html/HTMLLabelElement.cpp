@@ -77,9 +77,18 @@ RefPtr<HTMLElement> HTMLLabelElement::control() const
         // Search the children and descendants of the label element for a form element.
         // per http://dev.w3.org/html5/spec/Overview.html#the-label-element
         // the form element must be "labelable form-associated element".
-        for (const HTMLElement& labelableElement : descendantsOfType<HTMLElement>(*this)) {
-            if (labelableElement.isLabelable())
-                return const_cast<HTMLElement*>(&labelableElement);
+        for (const HTMLElement& descendant : descendantsOfType<HTMLElement>(*this)) {
+            if (document().settings().shadowRootReferenceTargetEnabled()) {
+                RefPtr<const Element> referenceTarget = descendant.deepShadowRootReferenceTargetOrSelf();
+                if (!referenceTarget || !is<HTMLElement>(referenceTarget))
+                    continue;
+                const HTMLElement* htmlReferenceTarget = dynamicDowncast<HTMLElement>(referenceTarget.get());
+                if (htmlReferenceTarget->isLabelable())
+                    return const_cast<HTMLElement*>(htmlReferenceTarget);
+            } else {
+                if (descendant.isLabelable())
+                    return const_cast<HTMLElement*>(&descendant);
+            }
         }
         return nullptr;
     }
@@ -88,7 +97,18 @@ RefPtr<HTMLElement> HTMLLabelElement::control() const
 
 RefPtr<HTMLElement> HTMLLabelElement::controlForBindings() const
 {
-    return control();
+    RefPtr<HTMLElement> controlElement = control();
+
+    if (!controlElement)
+        return nullptr;
+
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        Ref<Node> retargeted = treeScope().retargetToScope(*controlElement);
+        ASSERT(retargeted->isHTMLElement());
+        controlElement = dynamicDowncast<HTMLElement>(retargeted);
+    }
+
+    return controlElement;
 }
 
 HTMLFormElement* HTMLLabelElement::form() const
@@ -102,7 +122,15 @@ HTMLFormElement* HTMLLabelElement::form() const
 
 HTMLFormElement* HTMLLabelElement::formForBindings() const
 {
-    return form();
+    HTMLFormElement* formElement = form();
+
+    if (!formElement)
+        return nullptr;
+
+    if (document().settings().shadowRootReferenceTargetEnabled() && &formElement->treeScope() != &treeScope())
+        return nullptr;
+
+    return formElement;
 }
 
 void HTMLLabelElement::setActive(bool down, Style::InvalidationScope invalidationScope)

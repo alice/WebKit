@@ -91,6 +91,7 @@ RefPtr<Element> CustomElementDefaultARIA::elementForAttribute(const Element& thi
 
     RefPtr<Element> result;
     std::visit(WTF::makeVisitor([&](const AtomString& stringValue) {
+        // FIXME: This path shouldn't be necessary?
         if (thisElement.isInTreeScope())
             result = thisElement.treeScope().getElementById(stringValue);
     }, [&](const WeakPtr<Element, WeakPtrImplWithEventTargetData>& weakElementValue) {

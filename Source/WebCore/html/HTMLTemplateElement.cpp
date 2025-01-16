@@ -105,6 +105,16 @@ void HTMLTemplateElement::setShadowRootMode(const AtomString& value)
     setAttribute(HTMLNames::shadowrootmodeAttr, value);
 }
 
+const AtomString& HTMLTemplateElement::shadowRootReferenceTarget() const
+{
+    return attributeWithoutSynchronization(HTMLNames::shadowrootreferencetargetAttr);
+}
+
+void HTMLTemplateElement::setShadowRootReferenceTarget(const AtomString& value)
+{
+    setAttribute(HTMLNames::shadowrootreferencetargetAttr, value);
+}
+
 void HTMLTemplateElement::setDeclarativeShadowRoot(ShadowRoot& shadowRoot)
 {
     m_declarativeShadowRoot = shadowRoot;
@@ -158,7 +168,10 @@ void HTMLTemplateElement::attachAsDeclarativeShadowRootIfNeeded(Element& host)
     auto clonable = hasAttributeWithoutSynchronization(HTMLNames::shadowrootclonableAttr) ? ShadowRootClonable::Yes : ShadowRootClonable::No;
     auto serializable = hasAttributeWithoutSynchronization(HTMLNames::shadowrootserializableAttr) ? ShadowRootSerializable::Yes : ShadowRootSerializable::No;
 
-    auto exceptionOrShadowRoot = host.attachDeclarativeShadow(mode, delegatesFocus, clonable, serializable);
+    const AtomString& referenceTarget = shadowRootReferenceTarget();
+
+    auto exceptionOrShadowRoot = host.attachDeclarativeShadow(mode, delegatesFocus, clonable, serializable, referenceTarget);
+    
     if (exceptionOrShadowRoot.hasException())
         return;
 

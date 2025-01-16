@@ -58,7 +58,15 @@ HTMLFormElement* HTMLLegendElement::form() const
 
 HTMLFormElement* HTMLLegendElement::formForBindings() const
 {
-    return form();
+    HTMLFormElement* formElement = form();
+
+    if (!formElement)
+        return nullptr;
+
+    if (document().settings().shadowRootReferenceTargetEnabled() && &formElement->treeScope() != &treeScope())
+        return nullptr;
+
+    return formElement;
 }
     
 } // namespace
