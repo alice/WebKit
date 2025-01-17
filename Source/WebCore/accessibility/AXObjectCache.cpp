@@ -174,11 +174,8 @@ static bool nodeAndRendererAreValid(Node* node)
 
 static RefPtr<Element> getElementByIdWithReferenceTarget(const TreeScope& treeScope, const AtomString& elementId)
 {
-    if (elementId.isNull())
-        return nullptr;
-    
     RefPtr<Element> element = treeScope.getElementById(elementId);
-    return element->deepShadowRootReferenceTargetOrSelf();
+    return element ? element->deepShadowRootReferenceTargetOrSelf() : nullptr;
 }
 
 AccessibilityObjectInclusion AXComputedObjectAttributeCache::getIgnored(AXID id) const

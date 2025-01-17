@@ -147,15 +147,13 @@ HTMLFormElement* HTMLOptionElement::form() const
 
 HTMLFormElement* HTMLOptionElement::formForBindings() const
 {
-    HTMLFormElement* formElement = form();
-
-    if (!formElement)
-        return nullptr;
-
-    if (document().settings().shadowRootReferenceTargetEnabled() && &formElement->treeScope() != &treeScope())
-        return nullptr;
-
-    return formElement;
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        auto* form = this->form();
+        if (!form || &form->treeScope() != &treeScope())
+            return nullptr;
+        return form;
+    }
+    return form();
 }
 
 int HTMLOptionElement::index() const

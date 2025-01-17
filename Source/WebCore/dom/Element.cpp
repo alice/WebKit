@@ -2329,7 +2329,7 @@ ExplicitlySetAttrElementsMap* Element::explicitlySetAttrElementsMapIfExists() co
 
 static RefPtr<Element> getElementByIdInternalIncludingDisconnected(const Element& startElement, const AtomString& id)
 {
-    if (id.isNull() || id.isEmpty())
+    if (id.isEmpty())
         return nullptr;
 
     if (LIKELY(startElement.isInTreeScope()))
@@ -2366,7 +2366,7 @@ RefPtr<Element> Element::getElementForAttributeInternal(const QualifiedName& att
     }
     
     if (!hasExplicitlySetElement) {
-    const AtomString& id = getAttribute(attributeName);
+        const AtomString& id = getAttribute(attributeName);
         element = getElementByIdInternalIncludingDisconnected(*this, id);
     }
 
@@ -2379,16 +2379,13 @@ RefPtr<Element> Element::getElementForAttributeInternal(const QualifiedName& att
 RefPtr<Element> Element::getElementAttributeForBindings(const QualifiedName& attributeName) const
 {
     ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
-    RefPtr<Element> element = getElementForAttributeInternal(attributeName);
+    RefPtr element = getElementForAttributeInternal(attributeName);
 
     if (!element)
         return nullptr;
 
-    if (document().settings().shadowRootReferenceTargetEnabled()) {
-        Ref<Node> retargeted = treeScope().retargetToScope(*element);
-        ASSERT(retargeted->isElementNode());
-        return dynamicDowncast<Element>(retargeted);
-    }
+    if (document().settings().shadowRootReferenceTargetEnabled())
+        return downcast<Element>(treeScope().retargetToScope(*element));
 
     return element;
 }
@@ -2446,10 +2443,9 @@ std::optional<Vector<Ref<Element>>> Element::getElementsArrayForAttributeInterna
 
     if (document().settings().shadowRootReferenceTargetEnabled()) {
         elements = compactMap(elements.value(), [&](Ref<Element>& element) -> std::optional<Ref<Element>> {
-            RefPtr<Element> deepReferenceTarget = element->deepShadowRootReferenceTargetOrSelf();
-            if (!deepReferenceTarget)
-                return std::nullopt;
-            return *deepReferenceTarget;
+            if (RefPtr deepReferenceTarget = element->deepShadowRootReferenceTargetOrSelf())
+                return *deepReferenceTarget;
+            return std::nullopt;
         });
     }
 
@@ -2466,9 +2462,7 @@ std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttributeForBinding
 
     if (document().settings().shadowRootReferenceTargetEnabled()) {
         elements = compactMap(elements.value(), [&](Ref<Element>& element) -> std::optional<Ref<Element>> {
-            Ref<Node> retargeted = treeScope().retargetToScope(element);
-            ASSERT(retargeted->isElementNode());
-            return *dynamicDowncast<Element>(retargeted);
+            return downcast<Element>(treeScope().retargetToScope(element));
         });
     }
 
@@ -3261,8 +3255,7 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
         init.serializable ? ShadowRoot::Serializable::Yes : ShadowRoot::Serializable::No,
         isPrecustomizedOrDefinedCustomElement() ? ShadowRoot::AvailableToElementInternals::Yes : ShadowRoot::AvailableToElementInternals::No,
         WTFMove(registry), init.registry ? ShadowRoot::ScopedCustomElementRegistry::Yes : ShadowRoot::ScopedCustomElementRegistry::No);
-    if (document().settings().shadowRootReferenceTargetEnabled())
-        shadow->setReferenceTarget(AtomString(init.referenceTarget));
+    shadow->setReferenceTarget(AtomString(init.referenceTarget));
     addShadowRoot(shadow.copyRef());
     return shadow.get();
 }
@@ -3310,12 +3303,10 @@ RefPtr<const Element> Element::deepShadowRootReferenceTargetOrSelf() const {
 
     RefPtr<const Element> element = this;
 
-    ShadowRoot* shadow = shadowRoot();
+    RefPtr shadow = shadowRoot();
     while (shadow && shadow->hasReferenceTarget()) {
         element = shadow->referenceTargetElementOrHost();
-        if (!element)
-            return nullptr;
-        shadow = element->shadowRoot();
+        shadow = element ? element->shadowRoot() : nullptr;
     }
     return element;
 }

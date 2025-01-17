@@ -37,14 +37,13 @@ FormAssociatedElement::FormAssociatedElement(HTMLFormElement* form)
 
 HTMLFormElement* FormAssociatedElement::formForBindings() const
 {
-    HTMLFormElement* formElement = form();
-    if (!formElement)
-        return nullptr;
-
-    if (asHTMLElement().document().settings().shadowRootReferenceTargetEnabled() && &formElement->treeScope() != &asHTMLElement().treeScope())
-        return nullptr;
-
-    return formElement;
+    if (asHTMLElement().document().settings().shadowRootReferenceTargetEnabled()) {
+        auto* form = this->form();
+        if (!form || &form->treeScope() != &asHTMLElement().treeScope())
+            return nullptr;
+        return form;
+    }
+    return form();
 }
 
 void FormAssociatedElement::setFormInternal(RefPtr<HTMLFormElement>&& newForm)

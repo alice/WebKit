@@ -3252,15 +3252,8 @@ String AccessibilityObject::popupValue() const
 
 bool AccessibilityObject::hasDatalist() const
 {
-    auto datalistId = getAttribute(listAttr);
-    if (datalistId.isEmpty())
-        return false;
-
-    auto element = this->element();
-    if (!element || !is<HTMLInputElement>(element))
-        return false;
-
-    return dynamicDowncast<HTMLInputElement>(element)->hasDataList();
+    RefPtr input = dynamicDowncast<HTMLInputElement>(element());
+    return input && input->hasDataList();
 }
 
 bool AccessibilityObject::supportsSetSize() const
@@ -4051,11 +4044,11 @@ Vector<Ref<Element>> AccessibilityObject::elementsFromAttribute(const QualifiedN
         return elementsFromAttribute.value();
     }
 
-        if (auto* defaultARIA = element->customElementDefaultARIAIfExists()) {
-            return defaultARIA->elementsForAttribute(*element, attribute);
-        }
+    if (auto* defaultARIA = element->customElementDefaultARIAIfExists()) {
+        return defaultARIA->elementsForAttribute(*element, attribute);
+    }
 
-        return { };
+    return { };
 }
 
 #if PLATFORM(COCOA)
