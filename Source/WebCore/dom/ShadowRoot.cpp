@@ -59,6 +59,7 @@ struct SameSizeAsShadowRoot : public DocumentFragment, public TreeScope {
     void* styleScope;
     void* slotAssignment;
     std::optional<UncheckedKeyHashMap<AtomString, AtomString>> partMappings;
+    AtomString referenceTarget;
 };
 
 static_assert(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), "shadowroot should stay small");
@@ -451,4 +452,29 @@ Vector<RefPtr<WebAnimation>> ShadowRoot::getAnimations()
     });
 }
 
+bool ShadowRoot::hasReferenceTarget() const
+{
+    return !m_referenceTarget.isNull();
 }
+
+const AtomString& ShadowRoot::referenceTarget() const
+{
+    return m_referenceTarget;
+}
+
+void ShadowRoot::setReferenceTarget(const AtomString& referenceTarget) {
+    if (!document().settings().shadowRootReferenceTargetEnabled())
+        return;
+
+    m_referenceTarget = referenceTarget;
+}
+
+RefPtr<Element> ShadowRoot::referenceTargetElementOrHost() const
+{
+    if (!hasReferenceTarget())
+        return host();
+
+    return getElementById(m_referenceTarget);
+}
+
+} // namespace WebCore

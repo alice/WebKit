@@ -104,11 +104,12 @@ static RefPtr<HTMLFormElement> findAssociatedForm(const HTMLElement& element, HT
             // the first element in the document to have an ID that equal to
             // the value of form attribute, so we put the result of
             // treeScope().getElementById() over the given element.
-            RefPtr newFormCandidate = dynamicDowncast<HTMLFormElement>(element.treeScope().getElementById(formId));
+            RefPtr newFormCandidate = dynamicDowncast<HTMLFormElement>(element.getElementForAttributeInternal(formAttr));
             if (!newFormCandidate)
                 return nullptr;
             if (&element.traverseToRootNode() == &element.treeScope().rootNode()) {
-                ASSERT(&element.traverseToRootNode() == &newFormCandidate->traverseToRootNode());
+                ASSERT((element.document().settings().shadowRootReferenceTargetEnabled() && &element.traverseToRootNode() == &(element.treeScope().retargetToScope(*newFormCandidate))->treeScope().rootNode()) ||
+                       (&element.traverseToRootNode() == &newFormCandidate->traverseToRootNode()));
                 return newFormCandidate;
             }
         }

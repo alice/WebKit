@@ -151,6 +151,11 @@ public:
 
     Vector<RefPtr<WebAnimation>> getAnimations();
 
+    bool hasReferenceTarget() const;
+    const AtomString& referenceTarget() const;
+    void setReferenceTarget(const AtomString& referenceTarget);
+    RefPtr<Element> referenceTargetElementOrHost() const;
+
 private:
     ShadowRoot(Document&, ShadowRootMode, SlotAssignmentMode, DelegatesFocus, Clonable, Serializable, AvailableToElementInternals, RefPtr<CustomElementRegistry>&&, ScopedCustomElementRegistry);
     ShadowRoot(Document&, std::unique_ptr<SlotAssignment>&&);
@@ -181,6 +186,8 @@ private:
     std::unique_ptr<Style::Scope> m_styleScope;
     std::unique_ptr<SlotAssignment> m_slotAssignment;
     mutable std::optional<PartMappings> m_partMappings;
+    
+    AtomString m_referenceTarget;
 };
 
 inline Element* ShadowRoot::activeElement() const
